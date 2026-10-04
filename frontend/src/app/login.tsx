@@ -9,7 +9,7 @@ import { Field, PrimaryButton } from "../components/FinanceUI";
 
 export default function Login() {
   const router = useRouter();
-  const [email, setEmail] = useState("pin@university.ac.th");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);

@@ -1,11 +1,11 @@
 {
-  "name": "my-backend",
+  "name": "student-finance-backend",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Student Finance API for income, expenses, budgets, savings and insights",
+  "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node --test test/*.test.js"
   },
   "keywords": [],
   "author": "",

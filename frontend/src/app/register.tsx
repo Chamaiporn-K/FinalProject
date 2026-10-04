@@ -34,7 +34,7 @@ export default function Register() {
       <Text style={s.title}>สมัครสมาชิก</Text>
       <Field label="ชื่อ-นามสกุล" value={name} onChangeText={setName} />
       <Field label="อีเมลมหาวิทยาลัย" value={email} onChangeText={setEmail} keyboardType="email-address" />
-      <Field label="รหัสผ่าน" value={password} onChangeText={setPassword} secureTextEntry />
+      <Field label="รหัสผ่าน (อย่างน้อย 8 ตัวอักษร)" value={password} onChangeText={setPassword} secureTextEntry />
       {error ? <Text style={s.error}>{error}</Text> : null}
       <PrimaryButton title={loading ? "กำลังสมัคร..." : "สร้างบัญชี"} onPress={handleRegister} disabled={loading} />
     </View>

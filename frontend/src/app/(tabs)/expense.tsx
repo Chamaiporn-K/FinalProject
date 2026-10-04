@@ -1,3 +1,5 @@
+import { currentMonth } from "../../lib/dates";
+import { MonthPicker } from "../../components/MonthPicker";
 import React, { useCallback, useState } from "react";
 import { View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
@@ -5,12 +7,14 @@ import { COLORS } from "../../constants/theme";
 import { api } from "../../lib/api";
 import { Card } from "../../components/FinanceUI";
 
-const MONTH = "2026-09";
-const FILTERS = ["ทั้งหมด", "อาหาร", "เดินทาง", "Shopping"];
+
+
 
 export default function Expense() {
+  const [month, setMonth] = useState(currentMonth);
   const router = useRouter();
   const [items, setItems] = useState<any[]>([]);
+  const [filters, setFilters] = useState<string[]>(["ทั้งหมด"]);
   const [filter, setFilter] = useState("ทั้งหมด");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -18,18 +22,18 @@ export default function Expense() {
   const load = useCallback(async () => {
     try {
       setLoading(true); setError(null);
-      const params: Record<string, string> = { month: MONTH };
+      const params: Record<string, string> = { month: month };
       if (filter !== "ทั้งหมด") params.category = filter;
-      setItems(await api.getExpenses(params));
+      const [rows, categories] = await Promise.all([api.getExpenses(params), api.getCategories("expense")]);
+      setItems(rows); setFilters(["ทั้งหมด", ...new Set(categories.map(c => c.name))]);
     } catch (e: any) { setError(e.message); }
     finally { setLoading(false); }
-  }, [filter]);
+  }, [filter, month]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
   async function remove(id: string) {
-    await api.deleteExpense(id);
-    load();
+    try { await api.deleteExpense(id); await load(); } catch (e: any) { setError(e.message); }
   }
 
   return (
@@ -41,14 +45,15 @@ export default function Expense() {
         </TouchableOpacity>
       </View>
 
-      <View style={{ flexDirection: "row", gap: 6, paddingHorizontal: 18, marginTop: 12 }}>
-        {FILTERS.map((f) => (
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, paddingHorizontal: 18, marginTop: 12 }}>
+        {filters.map((f) => (
           <TouchableOpacity key={f} style={[s.filterPill, f === filter && s.filterPillActive]} onPress={() => setFilter(f)}>
             <Text style={[s.filterText, f === filter && s.filterTextActive]}>{f}</Text>
           </TouchableOpacity>
         ))}
       </View>
 
+      <MonthPicker month={month} onChange={setMonth} />
       {loading && <ActivityIndicator style={{ marginTop: 20 }} color={COLORS.greenDk} />}
       {error && <Text style={s.error}>{error}</Text>}
 

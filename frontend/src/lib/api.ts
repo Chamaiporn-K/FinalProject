@@ -1,9 +1,5 @@
-// ------------------------------------------------------------------
-// api.ts — talks to the BACKEND service (CONFIG.API_BASE_URL).
-// Full contract your backend teammate needs to implement.
-// Requires: npx expo install @react-native-async-storage/async-storage
-// ------------------------------------------------------------------
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { router } from "expo-router";
 import { CONFIG } from "./config";
 
 async function request(path: string, opts: { method?: string; body?: any; auth?: boolean } = {}) {
@@ -23,11 +19,17 @@ async function request(path: string, opts: { method?: string; body?: any; auth?:
   let data: any = null;
   try { data = await res.json(); } catch { /* empty body ok */ }
 
-  if (!res.ok) throw new Error(data?.message || `Request failed: ${method} ${path} (${res.status})`);
+  if (auth && res.status === 401) { await AsyncStorage.removeItem(CONFIG.TOKEN_KEY); router.replace("/login"); }
+  if (!res.ok) throw new Error(data?.message || data?.error || `Request failed: ${method} ${path} (${res.status})`);
   return data;
 }
 
+export type Category = { id: number; name: string; type: "income" | "expense"; icon: string };
 export const api = {
+  getCategories: (type: "income" | "expense"): Promise<Category[]> => request("/categories?type=" + type),
+  addCategory: (name: string, type: "income" | "expense"): Promise<Category> => request("/categories", { method: "POST", body: { name, type } }),
+  getInsights: (month: string) => request("/ai/insights", { method: "POST", body: { month } }),
+
   // ---------- Auth / User ----------
   // POST /auth/register { name, email, password } -> { token, user }
   register: (name: string, email: string, password: string) =>
@@ -46,9 +48,9 @@ export const api = {
   updateProfile: (payload: any) => request("/users/me", { method: "PUT", body: payload }),
 
   // ---------- Income ----------
-  // GET /income?month=2026-09 -> [{ id, type, amount, date, note }]
+  // GET /income?month=YYYY-MM -> [{ id, type, amount, date, note }]
   getIncomes: (month: string) => request(`/income?month=${month}`),
-  // POST /income { type, amount, date, note }
+  // POST /income { categoryId, amount, date, note }
   addIncome: (payload: any) => request("/income", { method: "POST", body: payload }),
   updateIncome: (id: string, payload: any) => request(`/income/${id}`, { method: "PUT", body: payload }),
   deleteIncome: (id: string) => request(`/income/${id}`, { method: "DELETE" }),
@@ -72,7 +74,7 @@ export const api = {
   getDashboardSummary: (month: string) => request(`/dashboard/summary?month=${month}`),
 
   // ---------- Budget / Saving goal ----------
-  // GET /budget?month= -> { savingGoal: {target, saved, deadline}, categoryBudgets: [{category, limit, spent}] }
+  // GET /budget?month= -> { savingGoal: {id, name, target, saved, deadline} | null, categoryBudgets: [{category, limit, spent}] }
   getBudget: (month: string) => request(`/budget?month=${month}`),
   setSavingGoal: (payload: any) => request("/budget/saving-goal", { method: "POST", body: payload }),
   setCategoryBudget: (payload: any) => request("/budget/category", { method: "POST", body: payload }),

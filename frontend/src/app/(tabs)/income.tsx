@@ -1,3 +1,5 @@
+import { currentMonth } from "../../lib/dates";
+import { MonthPicker } from "../../components/MonthPicker";
 import React, { useCallback, useState } from "react";
 import { View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
@@ -5,9 +7,10 @@ import { COLORS } from "../../constants/theme";
 import { api } from "../../lib/api";
 import { Card } from "../../components/FinanceUI";
 
-const MONTH = "2026-09";
+
 
 export default function Income() {
+  const [month, setMonth] = useState(currentMonth);
   const router = useRouter();
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -16,16 +19,15 @@ export default function Income() {
   const load = useCallback(async () => {
     try {
       setLoading(true); setError(null);
-      setItems(await api.getIncomes(MONTH));
+      setItems(await api.getIncomes(month));
     } catch (e: any) { setError(e.message); }
     finally { setLoading(false); }
-  }, []);
+  }, [month]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
   async function remove(id: string) {
-    await api.deleteIncome(id);
-    load();
+    try { await api.deleteIncome(id); await load(); } catch (e: any) { setError(e.message); }
   }
 
   const total = items.reduce((sum, i) => sum + Number(i.amount || 0), 0);
@@ -39,6 +41,7 @@ export default function Income() {
         </TouchableOpacity>
       </View>
 
+      <MonthPicker month={month} onChange={setMonth} />
       {loading && <ActivityIndicator style={{ marginTop: 20 }} color={COLORS.greenDk} />}
       {error && <Text style={s.error}>{error}</Text>}
 

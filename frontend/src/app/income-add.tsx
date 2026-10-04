@@ -1,28 +1,35 @@
-import React, { useState } from "react";
-import { View, Text, StyleSheet, Platform } from "react-native";
+import React, { useState, useEffect } from "react";
+import { View, Text, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
-import DateTimePicker from "@react-native-community/datetimepicker";
+import { DateField } from "../components/DateField";
+import { localDate } from "../lib/dates";
 import { COLORS } from "../constants/theme";
-import { api } from "../lib/api";
+import { api, Category } from "../lib/api";
 import { Field, PrimaryButton, CategoryPills } from "../components/FinanceUI";
 
-const DEFAULT_TYPES = ["เงินจากผู้ปกครอง", "เงินเดือน", "งานพิเศษ", "อื่น ๆ"];
 
 export default function IncomeAdd() {
   const router = useRouter();
-  const [types, setTypes] = useState(DEFAULT_TYPES);
-  const [type, setType] = useState(DEFAULT_TYPES[0]);
+  const [types, setTypes] = useState<Category[]>([]);
+  const [type, setType] = useState("");
   const [amount, setAmount] = useState("");
-  const [date, setDate] = useState(new Date());
+  const [date, setDate] = useState(localDate());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => { api.getCategories("income").then(rows => { setTypes(rows); setType(rows[0]?.name || ""); }).catch(e => setError(e.message)); }, []);
+  async function addCategory(name: string) {
+    try { const row = await api.addCategory(name, "income"); setTypes(rows => [...rows, row]); setType(row.name); }
+    catch (e: any) { setError(e.message); }
+  }
   async function save() {
+    const chosen = types.find(c => c.name === type);
+    if (!chosen) { setError("เลือกหมวดหมู่ก่อนบันทึก"); return; }
     const num = Number(amount);
-    if (!num || num <= 0) { setError("กรอกจำนวนเงินให้ถูกต้อง"); return; }
+    if (!Number.isFinite(num) || num <= 0) { setError("กรอกจำนวนเงินให้ถูกต้อง"); return; }
     try {
       setLoading(true); setError(null);
-      await api.addIncome({ type, amount: num, date: date.toISOString().slice(0, 10) });
+      await api.addIncome({ categoryId: chosen.id, amount: num, date });
       router.back();
     } catch (e: any) {
       setError(e.message);
@@ -34,18 +41,11 @@ export default function IncomeAdd() {
   return (
     <View style={s.wrap}>
       <Text style={s.label}>ประเภท</Text>
-      <CategoryPills options={types} selected={type} onSelect={setType} onAdd={(v) => { setTypes([...types, v]); setType(v); }} />
+      <CategoryPills options={types.map(c => c.name)} selected={type} onSelect={setType} onAdd={addCategory} />
 
       <Field label="จำนวนเงิน" value={amount} onChangeText={setAmount} keyboardType="numeric" placeholder="0.00" />
 
-      <Text style={s.label}>วันที่</Text>
-      <DateTimePicker
-        value={date}
-        mode="date"
-        display={Platform.OS === "ios" ? "compact" : "default"}
-        onChange={(_, d) => d && setDate(d)}
-        style={{ alignSelf: "flex-start", marginBottom: 16 }}
-      />
+      <DateField value={date} onChange={setDate} />
 
       {error ? <Text style={s.error}>{error}</Text> : null}
       <PrimaryButton title={loading ? "กำลังบันทึก..." : "บันทึกรายรับ"} onPress={save} disabled={loading} />

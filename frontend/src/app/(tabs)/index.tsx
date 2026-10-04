@@ -1,3 +1,5 @@
+import { currentMonth } from "../../lib/dates";
+import { MonthPicker } from "../../components/MonthPicker";
 import React, { useCallback, useState } from "react";
 import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity } from "react-native";
 import { useFocusEffect } from "expo-router";
@@ -5,9 +7,10 @@ import { COLORS } from "../../constants/theme";
 import { api } from "../../lib/api";
 import { Card } from "../../components/FinanceUI";
 
-const MONTH = "2026-09"; // TODO: replace with a real month picker later
+
 
 export default function Dashboard() {
+  const [month, setMonth] = useState(currentMonth);
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -15,13 +18,13 @@ export default function Dashboard() {
   const load = useCallback(async () => {
     try {
       setLoading(true); setError(null);
-      setData(await api.getDashboardSummary(MONTH));
+      setData(await api.getDashboardSummary(month));
     } catch (e: any) {
       setError(e.message);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [month]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
@@ -31,8 +34,9 @@ export default function Dashboard() {
 
   return (
     <ScrollView style={s.wrap} contentContainerStyle={{ padding: 18, paddingTop: 50 }}>
+      <MonthPicker month={month} onChange={setMonth} />
       <View style={s.balanceCard}>
-        <Text style={s.balanceLabel}>เงินคงเหลือ · {MONTH}</Text>
+        <Text style={s.balanceLabel}>เงินคงเหลือ · {month}</Text>
         <Text style={s.balanceValue}>฿{fmt(data.balance)}</Text>
         <View style={{ flexDirection: "row", gap: 16, marginTop: 10 }}>
           <Text style={s.balanceSub}>⬇ ฿{fmt(data.totalIncome)}</Text>

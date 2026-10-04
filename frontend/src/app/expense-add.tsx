@@ -1,29 +1,36 @@
-import React, { useState } from "react";
-import { View, Text, StyleSheet, Platform } from "react-native";
+import React, { useState, useEffect } from "react";
+import { View, Text, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
-import DateTimePicker from "@react-native-community/datetimepicker";
+import { DateField } from "../components/DateField";
+import { localDate } from "../lib/dates";
 import { COLORS } from "../constants/theme";
-import { api } from "../lib/api";
+import { api, Category } from "../lib/api";
 import { Field, PrimaryButton, CategoryPills } from "../components/FinanceUI";
 
-const DEFAULT_CATEGORIES = ["อาหาร", "เดินทาง", "การศึกษา", "Shopping", "Entertainment", "ที่พัก", "อื่น ๆ"];
 
 export default function ExpenseAdd() {
   const router = useRouter();
-  const [categories, setCategories] = useState(DEFAULT_CATEGORIES);
-  const [category, setCategory] = useState(DEFAULT_CATEGORIES[0]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [category, setCategory] = useState("");
   const [note, setNote] = useState("");
   const [amount, setAmount] = useState("");
-  const [date, setDate] = useState(new Date());
+  const [date, setDate] = useState(localDate());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => { api.getCategories("expense").then(rows => { setCategories(rows); setCategory(rows[0]?.name || ""); }).catch(e => setError(e.message)); }, []);
+  async function addCategory(name: string) {
+    try { const row = await api.addCategory(name, "expense"); setCategories(rows => [...rows, row]); setCategory(row.name); }
+    catch (e: any) { setError(e.message); }
+  }
   async function save() {
+    const chosen = categories.find(c => c.name === category);
+    if (!chosen) { setError("เลือกหมวดหมู่ก่อนบันทึก"); return; }
     const num = Number(amount);
-    if (!num || num <= 0) { setError("กรอกจำนวนเงินให้ถูกต้อง"); return; }
+    if (!Number.isFinite(num) || num <= 0) { setError("กรอกจำนวนเงินให้ถูกต้อง"); return; }
     try {
       setLoading(true); setError(null);
-      await api.addExpense({ category, note, amount: num, date: date.toISOString().slice(0, 10) });
+      await api.addExpense({ categoryId: chosen.id, note, amount: num, date });
       router.back();
     } catch (e: any) {
       setError(e.message);
@@ -35,19 +42,12 @@ export default function ExpenseAdd() {
   return (
     <View style={s.wrap}>
       <Text style={s.label}>หมวดหมู่</Text>
-      <CategoryPills options={categories} selected={category} onSelect={setCategory} onAdd={(v) => { setCategories([...categories, v]); setCategory(v); }} />
+      <CategoryPills options={categories.map(c => c.name)} selected={category} onSelect={setCategory} onAdd={addCategory} />
 
       <Field label="รายละเอียด (ไม่บังคับ)" value={note} onChangeText={setNote} />
       <Field label="จำนวนเงิน" value={amount} onChangeText={setAmount} keyboardType="numeric" placeholder="0.00" />
 
-      <Text style={s.label}>วันที่</Text>
-      <DateTimePicker
-        value={date}
-        mode="date"
-        display={Platform.OS === "ios" ? "compact" : "default"}
-        onChange={(_, d) => d && setDate(d)}
-        style={{ alignSelf: "flex-start", marginBottom: 16 }}
-      />
+      <DateField value={date} onChange={setDate} />
 
       {error ? <Text style={s.error}>{error}</Text> : null}
       <PrimaryButton title={loading ? "กำลังบันทึก..." : "บันทึกรายจ่าย"} onPress={save} disabled={loading} />

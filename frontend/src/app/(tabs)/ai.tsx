@@ -1,14 +1,16 @@
+import { currentMonth } from "../../lib/dates";
+import { MonthPicker } from "../../components/MonthPicker";
 import React, { useCallback, useState } from "react";
 import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity } from "react-native";
 import { useFocusEffect } from "expo-router";
 import { COLORS } from "../../constants/theme";
-import { api } from "../../lib/api";
 import { ai } from "../../lib/ai";
 import { Card } from "../../components/FinanceUI";
 
-const MONTH = "2026-09";
+
 
 export default function AiAdvisor() {
+  const [month, setMonth] = useState(currentMonth);
   const [insights, setInsights] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -16,23 +18,22 @@ export default function AiAdvisor() {
   const load = useCallback(async () => {
     try {
       setLoading(true); setError(null);
-      // AI reasons over numbers the backend already computed — never its own math.
-      const [summary, budget] = await Promise.all([api.getDashboardSummary(MONTH), api.getBudget(MONTH)]);
-      const res = await ai.getInsights(MONTH, summary, budget);
+      const res = await ai.getInsights(month);
       setInsights(res.insights || []);
     } catch (e: any) { setError(e.message); }
     finally { setLoading(false); }
-  }, []);
+  }, [month]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
   return (
     <ScrollView style={s.wrap} contentContainerStyle={{ padding: 18, paddingTop: 50 }}>
+      <MonthPicker month={month} onChange={setMonth} />
       <View style={[s.row, { gap: 10, marginBottom: 14 }]}>
         <Text style={{ fontSize: 22 }}>🤖</Text>
         <View>
-          <Text style={s.h2}>AI Financial Advisor</Text>
-          <Text style={s.muted}>วิเคราะห์จากข้อมูลจริงของคุณ</Text>
+          <Text style={s.h2}>สรุปการเงินอัตโนมัติ</Text>
+          <Text style={s.muted}>คำแนะนำจากกฎและข้อมูลจริงของคุณ · ยังไม่ได้เชื่อม AI</Text>
         </View>
       </View>
 
