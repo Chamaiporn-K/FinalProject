@@ -11,6 +11,7 @@ import { Card } from "../../components/FinanceUI";
 
 export default function AiAdvisor() {
   const [month, setMonth] = useState(currentMonth);
+  const [status, setStatus] = useState("กำลังโหลดคำแนะนำ...");
   const [insights, setInsights] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -20,6 +21,7 @@ export default function AiAdvisor() {
       setLoading(true); setError(null);
       const res = await ai.getInsights(month);
       setInsights(res.insights || []);
+      setStatus(res.message || (res.source === "openai" ? "คำแนะนำจาก AI" : "สรุปจากกฎ"));
     } catch (e: any) { setError(e.message); }
     finally { setLoading(false); }
   }, [month]);
@@ -32,8 +34,8 @@ export default function AiAdvisor() {
       <View style={[s.row, { gap: 10, marginBottom: 14 }]}>
         <Text style={{ fontSize: 22 }}>🤖</Text>
         <View>
-          <Text style={s.h2}>สรุปการเงินอัตโนมัติ</Text>
-          <Text style={s.muted}>คำแนะนำจากกฎและข้อมูลจริงของคุณ · ยังไม่ได้เชื่อม AI</Text>
+          <Text style={s.h2}>คำแนะนำการเงิน</Text>
+          <Text style={s.muted}>{status}</Text>
         </View>
       </View>
 

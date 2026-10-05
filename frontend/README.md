@@ -26,4 +26,4 @@ npm run check:android
 
 check:android ตรวจการสร้าง JavaScript bundle และ assets สำหรับ Android โดยไม่คอมไพล์ Hermes bytecode เป็นการตรวจโค้ด ไม่ใช่การสร้าง APK หรือ release build
 
-คำแนะนำเป็นสรุปจากกฎของ Backend เป้าหมายออมใช้ตาราง saving_goals เดิม ยังไม่มีข้อมูลยอดออมสะสม
+คำแนะนำเรียก OpenAI ผ่าน Backend เมื่อมีคีย์ และแสดงสรุปจากกฎเมื่อ AI ไม่พร้อม เป้าหมายออมใช้ตาราง saving_goals เดิม ยังไม่มีข้อมูลยอดออมสะสม

@@ -7,7 +7,7 @@ const { ApiError, text, id, money, date, monthRange } = require('./validation');
 const profile = u => ({ id: u.user_id, name: u.full_name, email: u.email,
   baseMonthlyIncome: Number(u.monthly_income), monthlyBudgetGoal: Number(u.monthly_budget) });
 
-function createApp({ pool, jwtSecret = crypto.randomBytes(32).toString('hex') }) {
+function createApp({ pool, jwtSecret = crypto.randomBytes(32).toString('hex'), financeAI = null }) {
   const app = express();
   app.use(cors());
   app.use(express.json({ limit: '1mb' }));
@@ -256,11 +256,23 @@ function createApp({ pool, jwtSecret = crypto.randomBytes(32).toString('hex') })
     // Always calculate from authenticated database records; never trust client totals.
     const month = monthRange(req.body?.month).month;
     const data = await summary(req.userId, month), limits = await budget(req.userId, month);
-    const insights = [];
+    let insights = [];
+    let source = "rules";
+    let message = "ยังไม่ได้ตั้งค่า AI แสดงสรุปจากกฎแทน";
     if (data.totalIncome || data.totalExpense) {
       insights.push({ type: 'summary', text: `เดือน ${month} มีรายรับ ${data.totalIncome.toLocaleString('th-TH')} บาท รายจ่าย ${data.totalExpense.toLocaleString('th-TH')} บาท และคงเหลือสุทธิ ${data.balance.toLocaleString('th-TH')} บาท` });
       if (data.balance < 0) insights.push({ type: 'warning', text: 'รายจ่ายมากกว่ารายรับ ลองทบทวนรายการที่ลดได้และกำหนดงบรายหมวด' });
       for (const b of limits.categoryBudgets) if (b.spent > b.limit) insights.push({ type: 'budget', text: `หมวด ${b.category} ใช้เกินงบ ${(b.spent - b.limit).toFixed(2)} บาท` });
+    }
+    if (financeAI && (data.totalIncome || data.totalExpense)) {
+      try {
+        insights = await financeAI.generate({ userId: req.userId, month, summary: data, budget: limits });
+        source = 'openai'; message = 'คำแนะนำจาก AI โดยใช้ข้อมูลสรุปของคุณ';
+      } catch {
+        message = 'AI ยังไม่พร้อมใช้งาน แสดงสรุปจากกฎแทน';
+      }
+    } else if (!data.totalIncome && !data.totalExpense) {
+      message = 'ยังไม่มีรายการรายรับหรือรายจ่ายสำหรับเดือนนี้';
     }
     const saved = await transaction(req.userId, async c => {
       const result = [];
@@ -272,7 +284,7 @@ function createApp({ pool, jwtSecret = crypto.randomBytes(32).toString('hex') })
       }
       return result;
     });
-    res.json({ insights: saved, source: 'rules', message: 'สรุปอัตโนมัติจากกฎ ยังไม่ได้เชื่อมโมเดล AI' });
+    res.json({ insights: saved, source, message, model: source === 'openai' ? financeAI.model : null });
   }));
   app.use((req, res) => res.status(404).json({ message: 'ไม่พบเส้นทางที่ร้องขอ' }));
   app.use((error, req, res, next) => {

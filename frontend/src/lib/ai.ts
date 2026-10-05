@@ -1,3 +1,3 @@
 import { api } from "./api";
-// Deterministic summaries from server records. A model can be connected later.
+// All AI requests go through the authenticated Backend; no API key in the app.
 export const ai = { getInsights: (month: string) => api.getInsights(month) };

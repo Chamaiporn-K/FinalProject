@@ -8,7 +8,7 @@ const { date, money, monthRange } = require('../validation');
 const secret = 'finance-integration-test-secret';
 const user = { user_id: 7, full_name: 'Student', email: 'test@example.com', monthly_income: '0.00', monthly_budget: '0.00', password: 'fixture-password-hash' };
 const auth = jwt.sign({ credential: crypto.createHash('sha256').update(user.password).digest('hex') }, secret, { subject: '7', audience: 'student-finance', issuer: 'student-finance-api' });
-async function fixture(t, handler = () => undefined) {
+async function fixture(t, handler = () => undefined, financeAI = null) {
   const events = [];
   async function query(sql, args = []) {
     events.push({ sql, args });
@@ -24,7 +24,7 @@ async function fixture(t, handler = () => undefined) {
     throw new Error('Unexpected query: ' + sql);
   }
   const connection = { query, beginTransaction: async () => events.push({ sql: 'BEGIN' }), commit: async () => events.push({ sql: 'COMMIT' }), rollback: async () => events.push({ sql: 'ROLLBACK' }), release: () => events.push({ sql: 'RELEASE' }) };
-  const app = createApp({ pool: { query, getConnection: async () => connection }, jwtSecret: secret });
+  const app = createApp({ pool: { query, getConnection: async () => connection }, jwtSecret: secret, financeAI });
   const server = app.listen(0, '127.0.0.1');
   await new Promise(resolve => server.once('listening', resolve));
   t.after(() => new Promise(resolve => server.close(resolve)));
@@ -159,4 +159,21 @@ test('registration stores a hash and returns finance profile', async t => {
   assert.equal(response.body.user.name, 'Student');
   assert.ok(!('password' in response.body.user));
   assert.equal(jwt.verify(response.body.token, secret).sub, '7');
+});
+
+for (const available of [true, false]) test('AI route ' + (available ? 'stores provider insights from server totals' : 'falls back to rules when provider fails'), async t => {
+  const financeAI = { model:'gpt-6-luna', generate:async data => {
+    assert.equal(data.userId,7);assert.equal(data.summary.totalIncome,1000);
+    if (!available) throw new Error('private error');
+    return [{type:'ai_budget',text:'ตั้งงบค่าอาหาร'}];
+  }};
+  const f=await fixture(t, sql => {
+    if(sql.includes('AS income,')) return [{income:'1000.00',expense:'200.00'}];
+    if(sql.includes('GROUP BY') || sql.includes('FROM saving_goals') || sql.includes('FROM budgets b') || sql.startsWith('SELECT insight_id')) return [];
+    if(sql.startsWith('INSERT INTO ai_insights')) return {insertId:1};
+  },financeAI);
+  const response=await f.request('/ai/insights',{month:'2026-10',dashboardSummary:{totalIncome:999999}});
+  assert.equal(response.status,200);assert.equal(response.body.source,available?'openai':'rules');
+  assert.equal(response.body.model,available?'gpt-6-luna':null);
+  assert.ok(!JSON.stringify(response.body).includes('private error'));
 });
