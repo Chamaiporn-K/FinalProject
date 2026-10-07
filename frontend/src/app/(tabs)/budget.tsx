@@ -45,7 +45,7 @@ export default function Budget() {
     catch (e: any) { setError(e.message); }
   }
   const g = data?.savingGoal;
-  return <ScrollView style={s.wrap} contentContainerStyle={{ padding: 18, paddingTop: 50 }}>
+  return <ScrollView style={s.wrap} contentContainerStyle={s.content}>
     <MonthPicker month={month} onChange={setMonth} />
     {loading && <ActivityIndicator color={COLORS.greenDk} />}
     {error && <View><Text style={s.error}>{error}</Text><TouchableOpacity onPress={load}><Text>ลองใหม่</Text></TouchableOpacity></View>}
@@ -84,7 +84,7 @@ export default function Budget() {
 }
 function fmt(n: number) { return Number(n || 0).toLocaleString("th-TH"); }
 const s = StyleSheet.create({
-  wrap: { flex: 1, backgroundColor: COLORS.bg }, heading: { fontSize: 16, fontWeight: "700", marginBottom: 10, color: COLORS.text },
+  wrap: { flex: 1, backgroundColor: COLORS.bg }, content: { flexGrow: 1, width: "100%", maxWidth: 1120, alignSelf: "center", padding: 18, paddingTop: 32, paddingBottom: 100 }, heading: { fontSize: 16, fontWeight: "700", marginBottom: 10, color: COLORS.text },
   big: { fontSize: 20, marginBottom: 8 }, bar: { backgroundColor: COLORS.line, borderRadius: 20, height: 8, overflow: "hidden", marginVertical: 8 },
   fill: { height: "100%", backgroundColor: COLORS.greenDk }, muted: { color: COLORS.text2, fontSize: 12, marginTop: 10 }, error: { color: COLORS.red, marginBottom: 8 },
 });

@@ -51,10 +51,10 @@ function createApp({ pool, jwtSecret = crypto.randomBytes(32).toString('hex'), f
     const [rows] = await connection.query(`SELECT COALESCE(MAX(${column}), 0) + 1 AS next_id FROM ${table}`);
     return id(rows[0].next_id);
   }
-  async function category(connection, categoryId, expectedType) {
-    const [rows] = await connection.query('SELECT * FROM categories WHERE category_id = ? FOR UPDATE', [id(categoryId)]);
+  async function category(connection, categoryId, expectedType, userId) {
+    const [rows] = await connection.query('SELECT * FROM categories WHERE category_id = ? AND user_id = ? FOR UPDATE', [id(categoryId), userId]);
     if (!rows.length) throw new ApiError(404, 'ไม่พบหมวดหมู่');
-    if (rows[0].category_type !== expectedType) throw new ApiError(400, 'ประเภทหมวดหมู่ไม่ตรงกับรายการ');
+    if (rows[0].type !== expectedType) throw new ApiError(400, 'ประเภทหมวดหมู่ไม่ตรงกับรายการ');
     return rows[0];
   }
   app.get('/api', (req, res) => res.json({ name: 'Student Finance API' }));
@@ -119,7 +119,7 @@ function createApp({ pool, jwtSecret = crypto.randomBytes(32).toString('hex'), f
   app.get('/api/categories', route(async (req, res) => {
     const type = req.query.type;
     if (type !== undefined && !['income', 'expense'].includes(type)) throw new ApiError(400, 'ประเภทหมวดหมู่ไม่ถูกต้อง');
-    const [rows] = await pool.query(`SELECT category_id AS id, category_name AS name, category_type AS type, icon FROM categories ${type ? 'WHERE category_type = ?' : ''} ORDER BY category_id`, type ? [type] : []);
+    const [rows] = await pool.query(`SELECT category_id AS id, category_name AS name, type, '💰' AS icon FROM categories WHERE user_id = ? ${type ? 'AND type = ?' : ''} ORDER BY category_id`, type ? [req.userId, type] : [req.userId]);
     res.json(rows);
   }));
   app.post('/api/categories', route(async (req, res) => {
@@ -128,20 +128,20 @@ function createApp({ pool, jwtSecret = crypto.randomBytes(32).toString('hex'), f
     const icon = text(req.body?.icon ?? '💰', 'ไอคอน', 20);
     if (!['income', 'expense'].includes(type)) throw new ApiError(400, 'ประเภทหมวดหมู่ไม่ถูกต้อง');
     const result = await transaction(req.userId, async c => {
-      const [existing] = await c.query('SELECT category_id AS id, category_name AS name, category_type AS type, icon FROM categories WHERE category_name = ? AND category_type = ? LIMIT 1 FOR UPDATE', [name, type]);
+      const [existing] = await c.query("SELECT category_id AS id, category_name AS name, type, '💰' AS icon FROM categories WHERE user_id = ? AND category_name = ? AND type = ? LIMIT 1 FOR UPDATE", [req.userId, name, type]);
       if (existing.length) return existing[0];
       const categoryId = await nextId(c, 'categories', 'category_id');
-      await c.query('INSERT INTO categories (category_id, category_name, category_type, icon, created_at) VALUES (?, ?, ?, ?, NOW())', [categoryId, name, type, icon]);
+      await c.query('INSERT INTO categories (category_id, user_id, category_name, type) VALUES (?, ?, ?, ?)', [categoryId, req.userId, name, type]);
       return { id: categoryId, name, type, icon };
     }, 'categories');
     res.status(201).json(result);
   }));
-  // Categories in the supplied schema are shared. Deletion requires recent password verification.
+  // Deletion requires recent password verification.
   app.delete('/api/categories/:id', route(async (req, res) => {
     const categoryId = id(req.params.id);
     await transaction(req.userId, async (c, u) => {
       if (typeof req.body?.password !== 'string' || !await bcrypt.compare(req.body.password, u.password)) throw new ApiError(403, 'กรอกรหัสผ่านเพื่อยืนยันการลบหมวดหมู่ส่วนกลาง');
-      const [rows] = await c.query('SELECT category_id FROM categories WHERE category_id = ? FOR UPDATE', [categoryId]);
+      const [rows] = await c.query('SELECT category_id FROM categories WHERE category_id = ? AND user_id = ? FOR UPDATE', [categoryId, req.userId]);
       if (!rows.length) throw new ApiError(404, 'ไม่พบหมวดหมู่');
       for (const table of ['incomes', 'expenses', 'budgets']) {
         const [refs] = await c.query(`SELECT 1 FROM ${table} WHERE category_id = ? LIMIT 1`, [categoryId]);
@@ -162,8 +162,8 @@ function createApp({ pool, jwtSecret = crypto.randomBytes(32).toString('hex'), f
       if (req.query.category) { where += ' AND c.category_name = ?'; args.push(text(req.query.category, 'หมวดหมู่', 50)); }
       if (req.query.from) { where += ` AND t.${dateColumn} >= ?`; args.push(date(req.query.from)); }
       if (req.query.to) { where += ` AND t.${dateColumn} <= ?`; args.push(date(req.query.to)); }
-      if (req.query.q) { where += ' AND (t.description LIKE ? OR c.category_name LIKE ?)'; const q = `%${text(req.query.q, 'คำค้น', 255)}%`; args.push(q, q); }
-      const [rows] = await pool.query(`SELECT t.${key} AS id, t.category_id AS categoryId, c.category_name AS ${kind === 'income' ? 'type' : 'category'}, t.amount, DATE_FORMAT(t.${dateColumn}, '%Y-%m-%d') AS date, t.description AS note FROM ${table} t JOIN categories c ON c.category_id = t.category_id WHERE ${where} ORDER BY t.${dateColumn} DESC, t.${key} DESC`, args);
+      if (req.query.q) { where += ' AND (t.note LIKE ? OR c.category_name LIKE ?)'; const q = `%${text(req.query.q, 'คำค้น', 255)}%`; args.push(q, q); }
+      const [rows] = await pool.query(`SELECT t.${key} AS id, t.category_id AS categoryId, c.category_name AS ${kind === 'income' ? 'type' : 'category'}, t.amount, DATE_FORMAT(t.${dateColumn}, '%Y-%m-%d') AS date, t.note AS note FROM ${table} t JOIN categories c ON c.category_id = t.category_id WHERE ${where} ORDER BY t.${dateColumn} DESC, t.${key} DESC`, args);
       res.json(rows.map(row => ({ ...row, amount: Number(row.amount) })));
     }));
     const save = updating => route(async (req, res) => {
@@ -172,14 +172,14 @@ function createApp({ pool, jwtSecret = crypto.randomBytes(32).toString('hex'), f
       const itemDate = date(req.body?.date);
       const note = text(req.body?.note, 'รายละเอียด', 255, true);
       const result = await transaction(req.userId, async c => {
-        const cat = await category(c, req.body?.categoryId, kind);
+        const cat = await category(c, req.body?.categoryId, kind, req.userId);
         if (updating) {
           const [existing] = await c.query(`SELECT ${key} FROM ${table} WHERE ${key} = ? AND user_id = ? FOR UPDATE`, [itemId, req.userId]);
           if (!existing.length) throw new ApiError(404, 'ไม่พบรายการ');
-          await c.query(`UPDATE ${table} SET category_id = ?, amount = ?, ${dateColumn} = ?, description = ? WHERE ${key} = ? AND user_id = ?`, [cat.category_id, amount, itemDate, note, itemId, req.userId]);
+          await c.query(`UPDATE ${table} SET category_id = ?, amount = ?, ${dateColumn} = ?, note = ? WHERE ${key} = ? AND user_id = ?`, [cat.category_id, amount, itemDate, note, itemId, req.userId]);
           return itemId;
         }
-        const [insert] = await c.query(`INSERT INTO ${table} (user_id, category_id, amount, ${dateColumn}, description) VALUES (?, ?, ?, ?, ?)`, [req.userId, cat.category_id, amount, itemDate, note]);
+        const [insert] = await c.query(`INSERT INTO ${table} (user_id, category_id, amount, ${dateColumn}, note) VALUES (?, ?, ?, ?, ?)`, [req.userId, cat.category_id, amount, itemDate, note]);
         return insert.insertId;
       });
       res.status(updating ? 200 : 201).json({ id: result, success: true });
@@ -218,15 +218,15 @@ function createApp({ pool, jwtSecret = crypto.randomBytes(32).toString('hex'), f
   app.get('/api/dashboard/summary', route(async (req, res) => res.json(await summary(req.userId, req.query.month))));
   async function budget(userId, selectedMonth) {
     const range = monthRange(selectedMonth);
-    const [goals] = await pool.query(`SELECT goal_id AS id, goal_name AS name, target_amount AS target, DATE_FORMAT(start_date, '%Y-%m-%d') AS startDate, DATE_FORMAT(target_date, '%Y-%m-%d') AS deadline FROM saving_goals WHERE user_id = ? ORDER BY goal_id DESC LIMIT 1`, [userId]);
+    const [goals] = await pool.query(`SELECT goal_id AS id, title AS name, target_amount AS target, NULL AS startDate, DATE_FORMAT(target_date, '%Y-%m-%d') AS deadline FROM saving_goals WHERE user_id = ? ORDER BY goal_id DESC LIMIT 1`, [userId]);
     let savingGoal = null;
     if (goals.length) {
       const goal = goals[0];
       savingGoal = { ...goal, target: Number(goal.target), saved: null };
     }
-    const [rows] = await pool.query(`SELECT b.budget_id AS id, b.category_id AS categoryId, c.category_name AS category, b.budget_amount AS amount_limit,
+    const [rows] = await pool.query(`SELECT b.budget_id AS id, b.category_id AS categoryId, c.category_name AS category, b.amount AS amount_limit,
       (SELECT COALESCE(SUM(e.amount), 0) FROM expenses e WHERE e.user_id = b.user_id AND e.category_id = b.category_id AND e.expense_date >= ? AND e.expense_date < ?) AS spent
-      FROM budgets b JOIN categories c ON c.category_id = b.category_id WHERE b.user_id = ? AND b.budget_month = ? ORDER BY b.category_id`, [range.start, range.end, userId, range.start]);
+      FROM budgets b JOIN categories c ON c.category_id = b.category_id WHERE b.user_id = ? AND b.month = ? ORDER BY b.category_id`, [range.start, range.end, userId, range.month]);
     return { savingGoal, categoryBudgets: rows.map(row => ({ id: row.id, categoryId: row.categoryId, category: row.category, limit: Number(row.amount_limit), spent: Number(row.spent) })) };
   }
   app.get('/api/budget', route(async (req, res) => res.json(await budget(req.userId, req.query.month))));
@@ -234,10 +234,10 @@ function createApp({ pool, jwtSecret = crypto.randomBytes(32).toString('hex'), f
     const range = monthRange(req.body?.month);
     const limit = money(req.body?.limit);
     await transaction(req.userId, async c => {
-      const cat = await category(c, req.body?.categoryId, 'expense');
-      const [existing] = await c.query('SELECT budget_id FROM budgets WHERE user_id = ? AND category_id = ? AND budget_month = ? FOR UPDATE', [req.userId, cat.category_id, range.start]);
-      if (existing.length) await c.query('UPDATE budgets SET budget_amount = ? WHERE user_id = ? AND category_id = ? AND budget_month = ?', [limit, req.userId, cat.category_id, range.start]);
-      else await c.query('INSERT INTO budgets (user_id, category_id, budget_month, budget_amount) VALUES (?, ?, ?, ?)', [req.userId, cat.category_id, range.start, limit]);
+      const cat = await category(c, req.body?.categoryId, 'expense', req.userId);
+      const [existing] = await c.query('SELECT budget_id FROM budgets WHERE user_id = ? AND category_id = ? AND month = ? FOR UPDATE', [req.userId, cat.category_id, range.month]);
+      if (existing.length) await c.query('UPDATE budgets SET amount = ? WHERE user_id = ? AND category_id = ? AND month = ?', [limit, req.userId, cat.category_id, range.month]);
+      else await c.query('INSERT INTO budgets (user_id, category_id, month, amount) VALUES (?, ?, ?, ?)', [req.userId, cat.category_id, range.month, limit]);
     });
     res.json({ success: true });
   }));
@@ -247,7 +247,7 @@ function createApp({ pool, jwtSecret = crypto.randomBytes(32).toString('hex'), f
     const start = date(req.body?.startDate), deadline = date(req.body?.deadline);
     if (deadline < start) throw new ApiError(400, 'วันครบกำหนดต้องไม่ก่อนวันเริ่มต้น');
     const goalId = await transaction(req.userId, async c => {
-      const [result] = await c.query('INSERT INTO saving_goals (user_id, goal_name, target_amount, start_date, target_date) VALUES (?, ?, ?, ?, ?)', [req.userId, name, target, start, deadline]);
+      const [result] = await c.query('INSERT INTO saving_goals (user_id, title, target_amount, target_date) VALUES (?, ?, ?, ?)', [req.userId, name, target, deadline]);
       return result.insertId;
     });
     res.status(201).json({ id: goalId, success: true });
@@ -277,9 +277,9 @@ function createApp({ pool, jwtSecret = crypto.randomBytes(32).toString('hex'), f
     const saved = await transaction(req.userId, async c => {
       const result = [];
       for (const insight of insights) {
-        const [existing] = await c.query('SELECT insight_id FROM ai_insights WHERE user_id = ? AND title = ? AND content = ? AND insight_type = ? LIMIT 1', [req.userId, `สรุปการเงิน ${month}`, insight.text, insight.type]);
+        const [existing] = await c.query('SELECT insight_id FROM ai_insights WHERE user_id = ? AND month = ? AND content = ? LIMIT 1', [req.userId, month, insight.text]);
         if (existing.length) { result.push({ ...insight, id: existing[0].insight_id }); continue; }
-        const [row] = await c.query('INSERT INTO ai_insights (user_id, title, content, insight_type) VALUES (?, ?, ?, ?)', [req.userId, `สรุปการเงิน ${month}`, insight.text, insight.type]);
+        const [row] = await c.query('INSERT INTO ai_insights (user_id, month, content) VALUES (?, ?, ?)', [req.userId, month, insight.text]);
         result.push({ ...insight, id: row.insertId });
       }
       return result;
@@ -292,7 +292,7 @@ function createApp({ pool, jwtSecret = crypto.randomBytes(32).toString('hex'), f
     if (error instanceof ApiError) return res.status(error.status).json({ message: error.message });
     if (error.type === 'entity.too.large') return res.status(413).json({ message: 'ข้อมูลที่ส่งมีขนาดใหญ่เกินไป' });
     if (error.type === 'entity.parse.failed') return res.status(400).json({ message: 'รูปแบบข้อมูล JSON ไม่ถูกต้อง' });
-    console.error('Finance API error:', error.code || error.message);
+    console.error('Finance API error:', error.code || 'UNKNOWN', error.sqlMessage || error.message);
     res.status(500).json({ message: 'ระบบไม่สามารถดำเนินการได้ กรุณาลองใหม่' });
   });
   return app;

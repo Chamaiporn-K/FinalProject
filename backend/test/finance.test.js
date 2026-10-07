@@ -20,7 +20,7 @@ async function fixture(t, handler = () => undefined, financeAI = null) {
     if (sql.includes('MAX(category_id)')) return [[{ next_id: 8 }]];
     if (/^SET TRANSACTION/.test(sql)) return [[]];
     if (/^SELECT .* FROM users WHERE user_id/.test(sql)) return [[user]];
-    if (/^SELECT \* FROM categories/.test(sql)) return [[{ category_id: 3, category_type: 'expense' }]];
+    if (/^SELECT \* FROM categories/.test(sql)) return [[{ category_id: 3, user_id: 7, type: 'expense' }]];
     throw new Error('Unexpected query: ' + sql);
   }
   const connection = { query, beginTransaction: async () => events.push({ sql: 'BEGIN' }), commit: async () => events.push({ sql: 'COMMIT' }), rollback: async () => events.push({ sql: 'ROLLBACK' }), release: () => events.push({ sql: 'RELEASE' }) };
@@ -48,6 +48,30 @@ test('rejects tokens for deleted users', async t => {
   const f = await fixture(t, sql => sql.startsWith('SELECT user_id, password FROM users') ? [] : undefined);
   assert.equal((await f.request('/expense', expense)).status, 401);
 });
+test('lists the authenticated user categories using the supplied schema', async t => {
+  const f = await fixture(t, (sql, args) => {
+    if (sql.startsWith('SELECT category_id AS id, category_name AS name, type')) {
+      assert.deepEqual(args, [7, 'expense']);
+      return [{ id: 3, name: 'Food', type: 'expense', icon: '💰' }];
+    }
+  });
+  const response = await f.request('/categories?type=expense', undefined, 'GET');
+  assert.equal(response.status, 200);
+  assert.deepEqual(response.body, [{ id: 3, name: 'Food', type: 'expense', icon: '💰' }]);
+});
+test('reads transaction notes from the supplied note column', async t => {
+  const f = await fixture(t, (sql) => {
+    if (sql.startsWith('SELECT t.expense_id AS id')) {
+      assert.ok(sql.includes('t.note AS note'));
+      assert.ok(!sql.includes('t.description'));
+      return [{ id: 10, categoryId: 3, category: 'Food', amount: '120.50', date: expense.date, note: 'Lunch' }];
+    }
+  });
+  const response = await f.request('/expense?month=2026-10', undefined, 'GET');
+  assert.equal(response.status, 200);
+  assert.equal(response.body[0].note, 'Lunch');
+  assert.equal(response.body[0].amount, 120.5);
+});
 test('validates dates, precision and month boundaries', () => {
   for (const value of ['2026-02-30', '2026-13-01', 'invalid', null]) assert.throws(() => date(value), e => e.status === 400);
   for (const value of [-1, 0, 1.001, NaN, Infinity, '', null, true]) assert.throws(() => money(value), e => e.status === 400);
@@ -67,7 +91,7 @@ test('nonexistent category rolls back and never inserts', async t => {
   assert.ok(!f.events.some(e => e.sql.startsWith('INSERT')));
 });
 test('income category cannot be used for expense', async t => {
-  const f = await fixture(t, sql => sql.startsWith('SELECT * FROM categories') ? [{ category_id: 3, category_type: 'income' }] : undefined);
+  const f = await fixture(t, sql => sql.startsWith('SELECT * FROM categories') ? [{ category_id: 3, user_id: 7, type: 'income' }] : undefined);
   assert.equal((await f.request('/expense', expense)).status, 400);
   assert.ok(!f.events.some(e => e.sql.startsWith('INSERT')));
 });
@@ -120,7 +144,7 @@ test('old tokens cannot access a new account reusing a manual ID', async t => {
 test('creates categories without AUTO_INCREMENT and releases ID lock after commit', async t => {
   const f = await fixture(t, (sql, args) => {
     if (sql.startsWith('SELECT category_id AS id')) return [];
-    if (sql.startsWith('INSERT INTO categories')) { assert.deepEqual(args, [8, 'Food', 'expense', '💰']); return { affectedRows: 1 }; }
+    if (sql.startsWith('INSERT INTO categories')) { assert.deepEqual(args, [8, 7, 'Food', 'expense']); return { affectedRows: 1 }; }
   });
   const response = await f.request('/categories', { name: 'Food', type: 'expense' });
   assert.equal(response.status, 201); assert.equal(response.body.id, 8);

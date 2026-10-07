@@ -1,104 +1,18 @@
-import { currentMonth } from "../../lib/dates";
-import { MonthPicker } from "../../components/MonthPicker";
 import React, { useCallback, useState } from "react";
 import { View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
-import { COLORS } from "../../constants/theme";
+import { COLORS, SPACE, TYPE } from "../../constants/theme";
+import { currentMonth } from "../../lib/dates";
+import { MonthPicker } from "../../components/MonthPicker";
 import { api } from "../../lib/api";
 import { Card } from "../../components/FinanceUI";
 
-
-
-
 export default function Expense() {
-  const [month, setMonth] = useState(currentMonth);
-  const router = useRouter();
-  const [items, setItems] = useState<any[]>([]);
-  const [filters, setFilters] = useState<string[]>(["ทั้งหมด"]);
-  const [filter, setFilter] = useState("ทั้งหมด");
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const load = useCallback(async () => {
-    try {
-      setLoading(true); setError(null);
-      const params: Record<string, string> = { month: month };
-      if (filter !== "ทั้งหมด") params.category = filter;
-      const [rows, categories] = await Promise.all([api.getExpenses(params), api.getCategories("expense")]);
-      setItems(rows); setFilters(["ทั้งหมด", ...new Set(categories.map(c => c.name))]);
-    } catch (e: any) { setError(e.message); }
-    finally { setLoading(false); }
-  }, [filter, month]);
-
+  const [month, setMonth] = useState(currentMonth); const router = useRouter(); const [items, setItems] = useState<any[]>([]); const [filters, setFilters] = useState<string[]>(["ทั้งหมด"]); const [filter, setFilter] = useState("ทั้งหมด"); const [loading, setLoading] = useState(true); const [error, setError] = useState<string | null>(null);
+  const load = useCallback(async () => { try { setLoading(true); setError(null); const params: Record<string, string> = { month }; if (filter !== "ทั้งหมด") params.category = filter; const [rows, categories] = await Promise.all([api.getExpenses(params), api.getCategories("expense")]); setItems(rows); setFilters(["ทั้งหมด", ...new Set(categories.map(c => c.name))]); } catch (e: any) { setError(e.message); } finally { setLoading(false); } }, [filter, month]);
   useFocusEffect(useCallback(() => { load(); }, [load]));
-
-  async function remove(id: string) {
-    try { await api.deleteExpense(id); await load(); } catch (e: any) { setError(e.message); }
-  }
-
-  return (
-    <View style={s.wrap}>
-      <View style={[s.row, s.between, { paddingHorizontal: 18, paddingTop: 50 }]}>
-        <Text style={s.h2}>รายจ่าย</Text>
-        <TouchableOpacity style={s.addBtn} onPress={() => router.push("/expense-add")}>
-          <Text style={s.addBtnText}>+ เพิ่ม</Text>
-        </TouchableOpacity>
-      </View>
-
-      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, paddingHorizontal: 18, marginTop: 12 }}>
-        {filters.map((f) => (
-          <TouchableOpacity key={f} style={[s.filterPill, f === filter && s.filterPillActive]} onPress={() => setFilter(f)}>
-            <Text style={[s.filterText, f === filter && s.filterTextActive]}>{f}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      <MonthPicker month={month} onChange={setMonth} />
-      {loading && <ActivityIndicator style={{ marginTop: 20 }} color={COLORS.greenDk} />}
-      {error && <Text style={s.error}>{error}</Text>}
-
-      {!loading && !error && (
-        <FlatList
-          style={{ paddingHorizontal: 18, marginTop: 10 }}
-          data={items}
-          keyExtractor={(i) => String(i.id)}
-          ListEmptyComponent={<Text style={s.muted}>ยังไม่มีรายการ</Text>}
-          renderItem={({ item }) => (
-            <Card style={{ marginBottom: 8 }}>
-              <View style={[s.row, s.between, { padding: 12 }]}>
-                <View>
-                  <Text style={s.bold}>{item.category}{item.note ? ` — ${item.note}` : ""}</Text>
-                  <Text style={s.muted}>{item.date}</Text>
-                </View>
-                <View style={{ flexDirection: "row", gap: 10, alignItems: "center" }}>
-                  <Text style={s.red}>-฿{Number(item.amount).toLocaleString("th-TH")}</Text>
-                  <TouchableOpacity onPress={() => remove(item.id)}>
-                    <Text style={s.deleteLink}>ลบ</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </Card>
-          )}
-        />
-      )}
-    </View>
-  );
+  async function remove(id: string) { try { await api.deleteExpense(id); await load(); } catch (e: any) { setError(e.message); } }
+  const total = items.reduce((sum, i) => sum + Number(i.amount || 0), 0);
+  return <View style={s.wrap}><View style={s.header}><View><Text style={s.eyebrow}>รายการเงิน</Text><Text style={s.title}>รายจ่าย</Text></View><TouchableOpacity style={s.add} onPress={() => router.push("/expense-add")}><Text style={s.addText}>＋ เพิ่ม</Text></TouchableOpacity></View><MonthPicker month={month} onChange={setMonth} /><View style={s.filters}>{filters.map(f => <TouchableOpacity key={f} style={[s.filter, f === filter && s.filterActive]} onPress={() => setFilter(f)}><Text style={[s.filterText, f === filter && s.filterActiveText]}>{f}</Text></TouchableOpacity>)}</View><Card style={s.totalCard}><Text style={s.totalLabel}>รายจ่ายรวมเดือนนี้</Text><Text style={s.total}>฿{total.toLocaleString("th-TH")}</Text><Text style={s.totalHint}>{items.length} รายการ</Text></Card>{loading ? <ActivityIndicator style={{ marginTop: SPACE.xl }} color={COLORS.greenDk} /> : error ? <Text style={s.error}>{error}</Text> : <FlatList contentContainerStyle={s.list} data={items} keyExtractor={i => String(i.id)} ListEmptyComponent={<Text style={s.empty}>ยังไม่มีรายการรายจ่ายในเดือนนี้</Text>} renderItem={({ item }) => <Card style={s.item}><View><Text style={s.itemTitle}>{item.category}</Text><Text style={s.muted}>{item.note || "ไม่มีรายละเอียด"} · {item.date}</Text></View><View style={s.itemRight}><Text style={s.amount}>-฿{Number(item.amount).toLocaleString("th-TH")}</Text><TouchableOpacity onPress={() => remove(item.id)}><Text style={s.delete}>ลบ</Text></TouchableOpacity></View></Card>} />}</View>;
 }
-
-const s = StyleSheet.create({
-  wrap: { flex: 1, backgroundColor: COLORS.bg },
-  h2: { fontSize: 18, fontWeight: "700", color: COLORS.text },
-  row: { flexDirection: "row", alignItems: "center" },
-  between: { justifyContent: "space-between" },
-  addBtn: { backgroundColor: COLORS.green1, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6 },
-  addBtnText: { color: "#0F3A2C", fontWeight: "600", fontSize: 12 },
-  filterPill: { borderWidth: 1, borderColor: COLORS.line, backgroundColor: COLORS.card, borderRadius: 20, paddingHorizontal: 11, paddingVertical: 5 },
-  filterPillActive: { backgroundColor: COLORS.greenDk, borderColor: COLORS.greenDk },
-  filterText: { fontSize: 12, color: COLORS.text2 },
-  filterTextActive: { color: "#fff", fontWeight: "600" },
-  muted: { color: COLORS.text2, fontSize: 12, textAlign: "center", marginTop: 12 },
-  bold: { fontWeight: "600" },
-  red: { color: COLORS.red, fontWeight: "600" },
-  deleteLink: { color: COLORS.red, fontSize: 12, fontWeight: "600" },
-  error: { color: COLORS.red, textAlign: "center", marginTop: 20 },
-});
+const s = StyleSheet.create({ wrap: { flex: 1, width: "100%", maxWidth: 1120, alignSelf: "center", backgroundColor: COLORS.bg, paddingHorizontal: SPACE.lg }, header: { paddingTop: 32, flexDirection: "row", justifyContent: "space-between", alignItems: "center" }, eyebrow: { ...TYPE.caption, color: COLORS.text2 }, title: { ...TYPE.title, color: COLORS.text }, add: { backgroundColor: COLORS.greenDk, borderRadius: 999, paddingHorizontal: 16, paddingVertical: 10 }, addText: { color: COLORS.white, fontWeight: "800" }, filters: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: SPACE.md }, filter: { borderWidth: 1, borderColor: COLORS.line, borderRadius: 999, paddingHorizontal: 11, paddingVertical: 7, backgroundColor: COLORS.card }, filterActive: { backgroundColor: COLORS.greenDk, borderColor: COLORS.greenDk }, filterText: { ...TYPE.caption, color: COLORS.text2 }, filterActiveText: { color: COLORS.white, fontWeight: "800" }, totalCard: { backgroundColor: COLORS.dangerBg, padding: SPACE.lg, marginBottom: SPACE.lg }, totalLabel: { ...TYPE.caption, color: COLORS.red }, total: { color: COLORS.red, fontSize: 28, fontWeight: "800", marginTop: 4 }, totalHint: { ...TYPE.caption, color: COLORS.text2, marginTop: 4 }, list: { paddingBottom: 100 }, item: { padding: SPACE.lg, marginBottom: SPACE.sm, flexDirection: "row", justifyContent: "space-between", alignItems: "center" }, itemTitle: { ...TYPE.body, fontWeight: "800", color: COLORS.text }, muted: { ...TYPE.caption, color: COLORS.text2, marginTop: 3, maxWidth: 230 }, itemRight: { alignItems: "flex-end", gap: 5 }, amount: { color: COLORS.danger, fontWeight: "800" }, delete: { color: COLORS.danger, ...TYPE.caption }, empty: { color: COLORS.text2, textAlign: "center", marginTop: SPACE.xl }, error: { color: COLORS.danger, textAlign: "center", marginTop: SPACE.xl } });

@@ -1,8 +1,8 @@
 import React, { useState } from "react";
-import { View, Text, StyleSheet, ActivityIndicator } from "react-native";
-import { useRouter, Link } from "expo-router";
+import { ActivityIndicator, Image, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Link, useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { COLORS } from "../constants/theme";
+import { COLORS, SPACE, TYPE } from "../constants/theme";
 import { CONFIG } from "../lib/config";
 import { api } from "../lib/api";
 import { Field, PrimaryButton } from "../components/FinanceUI";
@@ -15,42 +15,43 @@ export default function Login() {
   const [error, setError] = useState<string | null>(null);
 
   async function handleLogin() {
-    if (!email || !password) { setError("กรอกอีเมลและรหัสผ่านให้ครบ"); return; }
+    if (!email || !password) { setError("กรุณากรอกอีเมลและรหัสผ่าน"); return; }
     try {
       setLoading(true); setError(null);
       const { token } = await api.login(email, password);
       await AsyncStorage.setItem(CONFIG.TOKEN_KEY, token);
       router.replace("/(tabs)");
-    } catch (e: any) {
-      setError(e.message);
-    } finally {
-      setLoading(false);
-    }
+    } catch (e: any) { setError(e.message); } finally { setLoading(false); }
   }
 
   return (
-    <View style={s.wrap}>
-      <Text style={s.logo}>💰</Text>
-      <Text style={s.title}>Student Finance</Text>
-      <Text style={s.sub}>เข้าสู่ระบบเพื่อเริ่มจัดการเงิน</Text>
-
-      <Field label="อีเมล" value={email} onChangeText={setEmail} keyboardType="email-address" />
-      <Field label="รหัสผ่าน" value={password} onChangeText={setPassword} secureTextEntry />
-      {error ? <Text style={s.error}>{error}</Text> : null}
-
-      <PrimaryButton title={loading ? "กำลังเข้าสู่ระบบ..." : "เข้าสู่ระบบ"} onPress={handleLogin} disabled={loading} />
-      {loading && <ActivityIndicator style={{ marginTop: 10 }} color={COLORS.greenDk} />}
-
-      <Link href="/register" style={s.link}>ยังไม่มีบัญชี? สมัครสมาชิก</Link>
-    </View>
+    <ScrollView style={s.screen} contentContainerStyle={s.screenContent} keyboardShouldPersistTaps="handled">
+      <View style={s.form}>
+        <View style={s.brand}>
+          <Image source={require("../../assets/images/student-finance-mark.svg")} style={s.logo} accessibilityLabel="Student Finance logo" />
+          <Text style={s.title}>Student Finance</Text>
+          <Text style={s.sub}>จัดการเงินให้ง่าย เห็นภาพ และวางแผนได้ทุกเดือน</Text>
+        </View>
+        <Field label="อีเมล" value={email} onChangeText={setEmail} keyboardType="email-address" placeholder="you@example.com" />
+        <Field label="รหัสผ่าน" value={password} onChangeText={setPassword} secureTextEntry placeholder="••••••••" />
+        {error ? <Text style={s.error}>{error}</Text> : null}
+        <PrimaryButton title={loading ? "กำลังเข้าสู่ระบบ..." : "เข้าสู่ระบบ"} onPress={handleLogin} disabled={loading} />
+        {loading ? <ActivityIndicator style={s.loading} color={COLORS.greenDk} /> : null}
+        <Link href="/register" style={s.link}>ยังไม่มีบัญชี? สมัครสมาชิก</Link>
+      </View>
+    </ScrollView>
   );
 }
 
 const s = StyleSheet.create({
-  wrap: { flex: 1, backgroundColor: COLORS.bg, padding: 24, justifyContent: "center" },
-  logo: { fontSize: 40, textAlign: "center", marginBottom: 8 },
-  title: { fontSize: 20, fontWeight: "700", textAlign: "center", color: COLORS.text },
-  sub: { fontSize: 13, color: COLORS.text2, textAlign: "center", marginBottom: 24 },
-  error: { color: COLORS.red, fontSize: 12, marginBottom: 10 },
-  link: { textAlign: "center", color: COLORS.greenDk, fontWeight: "600", marginTop: 18, fontSize: 12 },
+  screen: { flex: 1, backgroundColor: COLORS.bg },
+  screenContent: { flexGrow: 1, justifyContent: "center", padding: SPACE.lg },
+  form: { width: "100%", maxWidth: 520, alignSelf: "center", padding: SPACE.xl },
+  brand: { alignItems: "center", marginBottom: SPACE.xxl },
+  logo: { width: 84, height: 84, marginBottom: SPACE.md },
+  title: { ...TYPE.title, color: COLORS.text },
+  sub: { ...TYPE.caption, color: COLORS.text2, textAlign: "center", marginTop: SPACE.sm },
+  error: { color: COLORS.danger, ...TYPE.caption, marginBottom: SPACE.sm },
+  loading: { marginTop: SPACE.md },
+  link: { color: COLORS.greenDk, fontWeight: "800", textAlign: "center", marginTop: SPACE.lg },
 });

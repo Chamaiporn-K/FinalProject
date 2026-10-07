@@ -1,0 +1,16 @@
+<svg width="256" height="256" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <title>Student Finance mark</title>
+  <desc>A unified student wallet with a graduation cap and growing balance line</desc>
+  <rect x="10" y="10" width="236" height="236" rx="72" fill="#0B493B"/>
+  <path d="M48 93C48 78.641 59.641 67 74 67H182C196.359 67 208 78.641 208 93V181C208 195.359 196.359 207 182 207H74C59.641 207 48 195.359 48 181V93Z" fill="#E7F2E5"/>
+  <path d="M77 91L128 68L179 91L128 114L77 91Z" fill="#F4C66A" stroke="#0B493B" stroke-width="7" stroke-linejoin="round"/>
+  <path d="M94 98V116C94 129 109 139 128 139C147 139 162 129 162 116V98" stroke="#0B493B" stroke-width="7" stroke-linecap="round"/>
+  <path d="M179 91V116" stroke="#0B493B" stroke-width="7" stroke-linecap="round"/>
+  <circle cx="128" cy="157" r="27" fill="#F3B36A" stroke="#0B493B" stroke-width="7"/>
+  <path d="M128 141V174M138 147C135 143 131 141 126 141C120 141 116 145 116 150C116 156 121 158 128 160C135 162 140 165 140 170C140 176 135 180 128 180C122 180 117 177 114 173" stroke="#0B493B" stroke-width="5" stroke-linecap="round"/>
+  <path d="M67 193H189" stroke="#0F6E56" stroke-width="8" stroke-linecap="round"/>
+  <path d="M157 191L171 177L181 187L199 166" stroke="#0F6E56" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M187 166H199V178" stroke="#0F6E56" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="55" cy="54" r="5" fill="#F4C66A"/>
+  <circle cx="201" cy="54" r="5" fill="#F4C66A"/>
+</svg>
